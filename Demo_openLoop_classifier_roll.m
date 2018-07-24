@@ -19,10 +19,15 @@ intercept = 9.5;
 scale = 1.25;
 
 %%
-addpath('/home/jebruce/Projects/MATLAB/sbv2_handtuned_flop_controller/faceClassifier');
-addpath('/home/jebruce/Projects/MATLAB/sbv2_handtuned_flop_controller/flop_faceDetection');
+if (strcmp(char(java.lang.System.getProperty('user.name')),'Massimo'))
+    addpath('/Users/Massimo/Documents/SUPERballController/sbv2_handtuned_flop_controller/faceClassifier');
+    addpath('/Users/Massimo/Documents/SUPERballController/sbv2_handtuned_flop_controller/flop_faceDetection');
+else
+    addpath('/home/jebruce/Projects/MATLAB/sbv2_handtuned_flop_controller/faceClassifier');
+    addpath('/home/jebruce/Projects/MATLAB/sbv2_handtuned_flop_controller/flop_faceDetection');
+end
 
-%load('IMUTrainingRutgers.mat');
+load('IMUTrainingRutgers.mat');
 loadSymCtrl;
 
 
@@ -49,9 +54,28 @@ clear j;
 %% Loop
 loopPath = [4, 3, 6, 0, 1, 2]; 
 
+
+
+% Since this demo only works one a single loop, 
+%check if we are on that loop
+checkCorrectFace = 0;
+nextFaceIndex = [];
+
+while(~checkCorrectFace)
 currFace = DetectCurrentFace(Group);
 nextFaceIndex = find(loopPath == currFace)+1;
 
+    if(isempty(nextFaceIndex))
+        disp('This demo does not work on the current face!');
+        disp('Please rotate the robot to a different face, and press any key to continue.');
+        pause();
+    else
+        disp(['The next face will be: ' num2str(nextFaceIndex)]);
+        checkCorrectFace = 1;
+    end
+end
+
+disp('Press any key to continue...');
 pause(); % wait till use is ready
 
 Group.setCommandLifetime(0);
@@ -69,11 +93,21 @@ while count ~= FACES_TO_FLOP
     lengths = (lengths - intercept)*scale + intercept;
     lengths = lengths/10;
     cmdMotorPositions = (100*lengths).*slope + offset;
+    
     % Send new positions to motors
     Cmd.position = cmdMotorPositions;
     Group.send(Cmd);
+    
+    tic;
     while (currFace ~= replyFace)
         currFace = DetectCurrentFace(Group);
+        
+        % Quit if elapsed time > 30s
+        if (toc > 10)
+            disp('It seems like something went wrong...');
+            count = FACES_TO_FLOP;
+            return;
+        end
     end  
     replyFace = currFace;
     

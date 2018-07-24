@@ -17,6 +17,11 @@ function cable_command = CableCommand( i_prev_tri, i_cur_tri, dir_change_code, c
 % Indices in imported data begin from 0
 % To use tri ids as key in python dict, subtract 1
 crossing_key = sprintf('c%04d',(i_prev_tri)*100 + i_cur_tri);
+
+%disp(['i_prev_tri' num2str(i_prev_tri)])
+%disp(['i_cur_tri' num2str(i_cur_tri)])
+%disp(crossing_key)
+
 i_maps       = imaps_of_crossings.(crossing_key);
 
 % Using indices from python in matlab; add 1
