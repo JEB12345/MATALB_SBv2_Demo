@@ -33,4 +33,4 @@ end
 % Set control strategy (3 is default)
 gains.controlStrategy = ones(1,Group.getNumModules)*3;
 
-Group.send('gains', gains);
+%Group.send('gains', gains);

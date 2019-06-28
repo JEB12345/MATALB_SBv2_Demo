@@ -1,3 +1,7 @@
+
+clear
+
+%%
 SBtransform = [
     19 20 21 15 8 2 14 9 4 13 7 6 1 18 12 3 17 11 5 16 10 23 24 22;
     18 3 13 22 4 15 7 14 20 9 17 1 21 2 11 8 16 24 10 19 5 12 23 6 
@@ -84,19 +88,98 @@ for i=[ones(1,1)*size(unpackingLenTen,1), (size(unpackingLenTen,1)):-1:100];%, 1
 
 end
 
+fbk = Group.getNextFeedback();
+for i = 1:numModules 
+    turns(i,1) = floor((fbk.position(i) + 8*pi)/(16*pi));
+    modPos(i,1) = mod(fbk.position(i) + 8*pi, 16*pi) - 8*pi;
+end
+
+
 disp('DOWN');
 pause();
 
-%%
 
+
+
+%% Reboot the motor!
+disp('Reboot the motor, wait a few seconds, and press any key to continue')
+pause();
+
+
+
+%% Setup
+clearvars -except turns modPos numModules;
+close all;
+
+hebiStuff;
+
+pause(2)
 
 Group.setCommandLifetime(0);
-Cmd.position = ones(1,24)*NaN;
 
-Cmd.position = ones(1,24)*0.0;
-Group.send(Cmd);
+%% Check if all motors are connected
 
-%ones(1,50)
+if Group.getNumModules ~= numModules
+    disp('Number of modules does not match!')
+    disp('Please CTRL+C out of the program')
+    pause()
+end
 
-%(-0.6748x[rads] + 104.12)[in cm]
-%((y/0.010) - 104.12)/(-0.6748) = x
+
+%% Set a new reference position 
+cmd = CommandStruct(); 
+
+fbk = Group.getNextFeedback(); 
+
+% Check if we possibly rolled over to the next absolute encoder range
+% e.g. we recorded a modPos = 24, but after reboot the position is -24, it it
+% possible that the motor turned just a few radiants and rolled over at
+% 8*pi (25.1327).
+for i = 1:numModules
+    if (abs(fbk.position(i) - modPos(i))) > (8*pi) %Max error range of 8*pi
+        disp(['Current Turns value for motor ' num2str(i) ' = ' num2str(turns(i))])
+        if fbk.position(i) < 0 % we rolled over to the next range
+            turns(i) = turns(i) + 1;
+        elseif fbk.position > 0 % we rolled back to the previous range
+            turns(i) = turns(i) - 1;
+        end
+
+        disp(['New Turns value for motor ' num2str(i) ' = ' num2str(turns(i))])
+    end
+end
+
+
+% Do not manually move the motors after this point, to avoid losing the
+% original position
+
+fbk = Group.getNextFeedback();
+disp('Position after reboot: ')
+disp(fbk.position)
+
+
+% Set back the reference position of the absolute encoder to a multiple of 16*pi
+for i = 1:numModules
+    newValue(1,i) = fbk.position(i) + 16*pi*turns(i);
+end
+
+Group.send('ReferencePosition', newValue);
+
+pause(0.5);
+fbk = Group.getNextFeedback();
+disp('Newly set position after reboot: ')
+disp(fbk.position)
+
+%% Go back to zero
+
+duration = 15; % [sec]
+timer = tic();
+while toc(timer) < duration
+
+    fbk = Group.getNextFeedback();  
+
+    % Go back to zero
+    cmd.position = ones(1,numModules)*0.0;
+    
+    Group.send(cmd); 
+    
+end

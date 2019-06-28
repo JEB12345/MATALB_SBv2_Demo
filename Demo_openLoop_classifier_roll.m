@@ -6,9 +6,10 @@ offset = [108.254000000000,100.192000000000,124.433000000000,101.073000000000,11
 slope = mean(slope);
 offset = mean(offset)-0.5;
 
-FACES_TO_FLOP = 1;
+FACES_TO_FLOP = 4;
 
 %% scale bias Rutgers
+%intercept = 9.5;
 intercept = 9.5;
 %scale = 0.4; % not enough
 %scale = 0.45; % not enough
@@ -16,6 +17,7 @@ intercept = 9.5;
 %scale = 2.5; % too much
 %scale = 1.5; % better, but still a bit much
 %scale = 1.25; % really close
+%scale = 1.25;
 scale = 1.25;
 
 %%
@@ -35,10 +37,11 @@ loadSymCtrl;
 hebiStuff;
 
 load('defaultGains.mat');
+
 Group.send('gains', defaultGains);
 
-Group.setFeedbackFrequency(500);
-modules.setFeedbackFrequency(500);
+Group.setFeedbackFrequency(250);
+modules.setFeedbackFrequency(250);
 
 %% Go to initial position
 
@@ -48,8 +51,8 @@ Cmd.position = ones(1,24)*NaN;
 Cmd.position = ones(1,24)*0.0;
 Group.send(Cmd);
 
-clear j;
-
+%%
+%Cmd.velocity = ones(1,24)*5.0;
 
 %% Loop
 loopPath = [4, 3, 6, 0, 1, 2]; 
@@ -62,7 +65,7 @@ checkCorrectFace = 0;
 nextFaceIndex = [];
 
 while(~checkCorrectFace)
-currFace = DetectCurrentFace(Group);
+currFace = DetectCurrentFace(Group, nbMotors, trainingData, labs);
 nextFaceIndex = find(loopPath == currFace)+1;
 
     if(isempty(nextFaceIndex))
@@ -80,14 +83,32 @@ pause(); % wait till use is ready
 
 Group.setCommandLifetime(0);
 
+Group.startLog();
+
 count = 0;
 
 while count ~= FACES_TO_FLOP
-    %currFace = DetectCurrentFace(Group);
+    %currFace = DetectCurrentFace(Group, nbMotors, trainingData, labs);
     nextFaceIndex = find(loopPath == currFace)+1;
+    
+    if(isempty(nextFaceIndex))
+        disp('Something went wrong. This face does not belong to the current loop!');
+        
+        Group.setCommandLifetime(0);
+        Cmd.position = ones(1,24)*NaN;
+        
+        Cmd.position = ones(1,24)*0.0;
+        Group.send(Cmd);
+        Group.stopLogFull('LogFormat', 'mat');
+
+        pause();
+    end
+    
     if (nextFaceIndex > 6)
         nextFaceIndex = 1;
     end
+    
+    
     replyFace = loopPath(nextFaceIndex)
     lengths = SymCtrl(replyFace,currFace,2); 
     lengths = (lengths - intercept)*scale + intercept;
@@ -100,15 +121,17 @@ while count ~= FACES_TO_FLOP
     
     tic;
     while (currFace ~= replyFace)
-        currFace = DetectCurrentFace(Group);
+        currFace = DetectCurrentFace(Group, nbMotors, trainingData, labs);
         
         % Quit if elapsed time > 30s
         if (toc > 10)
             disp('It seems like something went wrong...');
             count = FACES_TO_FLOP;
-            return;
+            %return;
+            replyFace = currFace;
         end
-    end  
+    end 
+    
     replyFace = currFace;
     
     count = count + 1;
@@ -139,4 +162,5 @@ Cmd.position = ones(1,24)*NaN;
 Cmd.position = ones(1,24)*0.0;
 Group.send(Cmd);
 
+Group.stopLogFull('LogFormat', 'mat');
 %Group.stopLogFull('LogFormat', 'mat');

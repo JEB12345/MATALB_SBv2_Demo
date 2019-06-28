@@ -9,8 +9,7 @@ offset = [108.254000000000,100.192000000000,124.433000000000,101.073000000000,11
 [v,i]=sort(SBtransform(1,:));
 SBtransformSort = SBtransform(:,i);
 
-unpackingLenTen = csvread('hex_pack_len_ten_prestress.csv');
-
+unpackingLenTen = csvread('cyl_horiz_pack_len_ten_prestress.csv');
 % %% Hebi Stuff
 hebiStuff;
 
@@ -59,14 +58,15 @@ Group.send('gains', gains);
 
 disp('ready...');
 
-%% Loop
-for i=[ones(1,1)*size(unpackingLenTen,1), (size(unpackingLenTen,1)):-1:100];%, 1:(size(unpackingLenTen,1)), ones(1,1)*size(unpackingLenTen,1)]
+%% Packing Loop
+for i = 1 : (size(unpackingLenTen,1) - 200)
+    
     current_lengths = unpackingLenTen(i,1:24);
     current_tensions = unpackingLenTen(i,25:end);
     
     current_tensions(current_tensions > 400.0) = 400.0;
     current_moments = current_tensions*0.006;
-    current_restLengths = current_lengths;% - (current_tensions/stiffness)
+    current_restLengths = current_lengths;
     
     newRestLengths(SBtransformSort(2,:)) = current_restLengths;
     newMoments(SBtransformSort(2,:)) = current_moments;
@@ -87,16 +87,34 @@ end
 disp('DOWN');
 pause();
 
+%% Unpacking Loop
+for i = (size(unpackingLenTen,1) - 200) : -1 : 1
+    
+    current_lengths = unpackingLenTen(i,1:24);
+    current_tensions = unpackingLenTen(i,25:end);
+    
+    current_tensions(current_tensions > 400.0) = 400.0;
+    current_moments = current_tensions*0.006;
+    current_restLengths = current_lengths;
+    
+    newRestLengths(SBtransformSort(2,:)) = current_restLengths;
+    newMoments(SBtransformSort(2,:)) = current_moments;
+    newMoments;
+        
+    cmdMotorPositions = (100*newRestLengths).*slope + offset;
+    %pause
+    %% While Loop
+    for stupid=1:1
+        Cmd.position = cmdMotorPositions;
+        Cmd.effort = newMoments*0.2;
+        Group.send(Cmd);
+        pause(0.025)
+    end
+
+end
+
 %%
-
-
 Group.setCommandLifetime(0);
-Cmd.position = ones(1,24)*NaN;
 
 Cmd.position = ones(1,24)*0.0;
 Group.send(Cmd);
-
-%ones(1,50)
-
-%(-0.6748x[rads] + 104.12)[in cm]
-%((y/0.010) - 104.12)/(-0.6748) = x
